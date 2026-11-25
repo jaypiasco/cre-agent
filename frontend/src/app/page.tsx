@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Building2,
@@ -151,6 +151,7 @@ export default function CreWorkbenchPage() {
   const [coa, setCoa] = useState<ChartOfAccountsEntry[]>(FALLBACK_COA);
 
   const [activeFilename, setActiveFilename] = useState<string>("");
+  const [analyzingFilename, setAnalyzingFilename] = useState<string>("");
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -158,6 +159,7 @@ export default function CreWorkbenchPage() {
   const [analysis, setAnalysis] = useState<InvoiceAnalysisResponse | null>(null);
   const [queue, setQueue] = useState<QueuedInvoice[]>([]);
   const [activeQueueId, setActiveQueueId] = useState<string | null>(null);
+  const activeQueueIdRef = useRef<string | null>(null);
   const [selectedGlCode, setSelectedGlCode] = useState<string>("");
   const [humanApproved, setHumanApproved] = useState<boolean>(false);
   const [batchId, setBatchId] = useState<string>("BATCH-001");
@@ -196,6 +198,7 @@ export default function CreWorkbenchPage() {
   }, []);
 
   const selectQueuedInvoice = useCallback((item: QueuedInvoice) => {
+    activeQueueIdRef.current = item.id;
     setActiveQueueId(item.id);
     setActiveFilename(item.filename);
     setExportResult(null);
@@ -224,11 +227,15 @@ export default function CreWorkbenchPage() {
     }));
     setQueue((prev) => [...newEntries, ...prev]);
 
+    activeQueueIdRef.current = newEntries[0].id;
+    setActiveQueueId(newEntries[0].id);
+    setActiveFilename(newEntries[0].filename);
+    setAnalysis(null);
+
     for (let i = 0; i < files.length; i += 1) {
       const file = files[i];
       const entryId = newEntries[i].id;
-      setActiveFilename(file.name);
-      setActiveQueueId(entryId);
+      setAnalyzingFilename(file.name);
       setQueue((prev) =>
         prev.map((q) => (q.id === entryId ? { ...q, status: "analyzing" } : q))
       );
@@ -242,7 +249,8 @@ export default function CreWorkbenchPage() {
             q.id === entryId ? { ...q, status: nextStatus, analysis: result } : q
           )
         );
-        if (i === 0 || files.length === 1) {
+        if (activeQueueIdRef.current === entryId) {
+          setErrorMsg(null);
           setAnalysis(result);
           setSelectedGlCode(result.gl_recommendation.gl_code);
         }
@@ -254,13 +262,14 @@ export default function CreWorkbenchPage() {
             q.id === entryId ? { ...q, status: "error", error: message } : q
           )
         );
-        if (i === 0 || files.length === 1) {
+        if (activeQueueIdRef.current === entryId) {
           setErrorMsg(message);
           setAnalysis(null);
         }
       }
     }
 
+    setAnalyzingFilename("");
     setIsAnalyzing(false);
   }, []);
 
@@ -499,7 +508,7 @@ export default function CreWorkbenchPage() {
               {isAnalyzing ? (
                 <div className="flex items-center gap-2.5 text-sm font-medium text-slate-700">
                   <Loader2 className="h-5 w-5 animate-spin text-slate-900" />
-                  <span>Analyzing {activeFilename || "invoice"}...</span>
+                  <span>Analyzing {analyzingFilename || activeFilename || "invoice"}...</span>
                 </div>
               ) : (
                 <>
@@ -528,6 +537,7 @@ export default function CreWorkbenchPage() {
                     size="sm"
                     disabled={isAnalyzing}
                     onClick={() => {
+                      activeQueueIdRef.current = null;
                       setQueue([]);
                       setActiveQueueId(null);
                     }}
