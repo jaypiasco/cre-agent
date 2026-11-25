@@ -153,10 +153,11 @@ class TraceContext:
         """Fetch a managed Langfuse prompt with automatic fallback to local constant."""
         if self._langfuse is None:
             return default_prompt, None
+        preferred_label = "production" if self._environment == "production" else "latest"
         try:
             prompt_obj = self._langfuse.get_prompt(
                 name,
-                label="latest",
+                label=preferred_label,
                 fallback=default_prompt,
             )
             compiled = prompt_obj.compile() if hasattr(prompt_obj, "compile") else default_prompt

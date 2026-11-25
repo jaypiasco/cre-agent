@@ -67,6 +67,14 @@ interface SamplePreset {
   path: string;
 }
 
+interface QueuedInvoice {
+  id: string;
+  filename: string;
+  status: "pending" | "analyzing" | "valid" | "needs_review" | "exported" | "error";
+  analysis?: InvoiceAnalysisResponse;
+  error?: string;
+}
+
 const SAMPLE_PRESETS: SamplePreset[] = [
   {
     id: "hvac",
@@ -148,6 +156,8 @@ export default function CreWorkbenchPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const [analysis, setAnalysis] = useState<InvoiceAnalysisResponse | null>(null);
+  const [queue, setQueue] = useState<QueuedInvoice[]>([]);
+  const [activeQueueId, setActiveQueueId] = useState<string | null>(null);
   const [selectedGlCode, setSelectedGlCode] = useState<string>("");
   const [humanApproved, setHumanApproved] = useState<boolean>(false);
   const [batchId, setBatchId] = useState<string>("BATCH-001");
@@ -185,27 +195,81 @@ export default function CreWorkbenchPage() {
     };
   }, []);
 
-  const runAnalysis = useCallback(async (file: File) => {
+  const selectQueuedInvoice = useCallback((item: QueuedInvoice) => {
+    setActiveQueueId(item.id);
+    setActiveFilename(item.filename);
+    setExportResult(null);
+    setHumanApproved(false);
+    setErrorMsg(item.error ?? null);
+    if (item.analysis) {
+      setAnalysis(item.analysis);
+      setSelectedGlCode(item.analysis.gl_recommendation.gl_code);
+    } else {
+      setAnalysis(null);
+    }
+  }, []);
+
+  const runBatchAnalysis = useCallback(async (files: File[]) => {
+    if (files.length === 0) return;
     setErrorMsg(null);
     setExportResult(null);
     setHumanApproved(false);
     setBatchId(defaultBatchId());
-    setActiveFilename(file.name);
     setIsAnalyzing(true);
 
-    try {
-      const result = await analyzeInvoicePdf(file);
-      setAnalysis(result);
-      setSelectedGlCode(result.gl_recommendation.gl_code);
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Failed to analyze invoice PDF.";
-      setErrorMsg(message);
-      setAnalysis(null);
-    } finally {
-      setIsAnalyzing(false);
+    const newEntries: QueuedInvoice[] = files.map((file, idx) => ({
+      id: `${Date.now()}-${idx}-${file.name}`,
+      filename: file.name,
+      status: "pending",
+    }));
+    setQueue((prev) => [...newEntries, ...prev]);
+
+    for (let i = 0; i < files.length; i += 1) {
+      const file = files[i];
+      const entryId = newEntries[i].id;
+      setActiveFilename(file.name);
+      setActiveQueueId(entryId);
+      setQueue((prev) =>
+        prev.map((q) => (q.id === entryId ? { ...q, status: "analyzing" } : q))
+      );
+
+      try {
+        const result = await analyzeInvoicePdf(file);
+        const nextStatus =
+          result.validation.status === "VALID" ? "valid" : "needs_review";
+        setQueue((prev) =>
+          prev.map((q) =>
+            q.id === entryId ? { ...q, status: nextStatus, analysis: result } : q
+          )
+        );
+        if (i === 0 || files.length === 1) {
+          setAnalysis(result);
+          setSelectedGlCode(result.gl_recommendation.gl_code);
+        }
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Failed to analyze invoice PDF.";
+        setQueue((prev) =>
+          prev.map((q) =>
+            q.id === entryId ? { ...q, status: "error", error: message } : q
+          )
+        );
+        if (i === 0 || files.length === 1) {
+          setErrorMsg(message);
+          setAnalysis(null);
+        }
+      }
     }
+
+    setIsAnalyzing(false);
   }, []);
+
+  const runAnalysis = useCallback(
+    async (file: File) => {
+      await runBatchAnalysis([file]);
+    },
+    [runBatchAnalysis]
+  );
 
   const handleSampleClick = async (preset: SamplePreset) => {
     setErrorMsg(null);
@@ -228,9 +292,11 @@ export default function CreWorkbenchPage() {
   };
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      void runAnalysis(file);
+    const files = Array.from(e.target.files ?? []).filter((f) =>
+      f.name.toLowerCase().endsWith(".pdf")
+    );
+    if (files.length > 0) {
+      void runBatchAnalysis(files);
     }
     e.target.value = "";
   };
@@ -238,14 +304,14 @@ export default function CreWorkbenchPage() {
   const handleDrop = (e: React.DragEvent<HTMLLabelElement>) => {
     e.preventDefault();
     setIsDragging(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file) {
-      if (!file.name.toLowerCase().endsWith(".pdf")) {
-        setErrorMsg("Only .pdf invoice files are supported.");
-        return;
-      }
-      void runAnalysis(file);
+    const dropped = Array.from(e.dataTransfer.files ?? []);
+    if (dropped.length === 0) return;
+    const pdfs = dropped.filter((f) => f.name.toLowerCase().endsWith(".pdf"));
+    if (pdfs.length === 0) {
+      setErrorMsg("Only .pdf invoice files are supported.");
+      return;
     }
+    void runBatchAnalysis(pdfs);
   };
 
   const selectedGlEntry = useMemo(() => {
@@ -279,6 +345,11 @@ export default function CreWorkbenchPage() {
       });
 
       setExportResult(res);
+      if (activeQueueId) {
+        setQueue((prev) =>
+          prev.map((q) => (q.id === activeQueueId ? { ...q, status: "exported" } : q))
+        );
+      }
 
       if (downloadType === "csv") {
         triggerDownload(res.csv_content, res.filename, "text/csv;charset=utf-8");
@@ -420,6 +491,7 @@ export default function CreWorkbenchPage() {
                 id="pdf-upload"
                 type="file"
                 accept=".pdf,application/pdf"
+                multiple
                 className="sr-only"
                 onChange={handleFileInput}
                 disabled={isAnalyzing}
@@ -433,16 +505,75 @@ export default function CreWorkbenchPage() {
                 <>
                   <Upload className="mb-2 h-5 w-5 text-slate-500" />
                   <p className="text-sm font-medium text-slate-700">
-                    Drop a vendor invoice PDF here, or{" "}
+                    Drop one or more vendor invoice PDFs here, or{" "}
                     <span className="underline underline-offset-4">browse</span>
                   </p>
                   <p className="mt-1 text-xs text-slate-500">
-                    Supports text-based PDFs and scanned image-only PDFs (up to
-                    5 pages)
+                    Supports batch upload of text-based &amp; scanned PDFs (up to
+                    5 pages each)
                   </p>
                 </>
               )}
             </label>
+
+            {queue.length > 0 && (
+              <div className="space-y-2 pt-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium uppercase tracking-wider text-slate-500">
+                    Invoice Queue ({queue.length})
+                  </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={isAnalyzing}
+                    onClick={() => {
+                      setQueue([]);
+                      setActiveQueueId(null);
+                    }}
+                    className="h-6 px-2 text-xs text-slate-500 hover:text-slate-800"
+                  >
+                    Clear
+                  </Button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {queue.map((item) => {
+                    const isActive = item.id === activeQueueId;
+                    const badgeClass =
+                      item.status === "valid" || item.status === "exported"
+                        ? "bg-emerald-100 text-emerald-800"
+                        : item.status === "needs_review"
+                          ? "bg-amber-100 text-amber-800"
+                          : item.status === "error"
+                            ? "bg-rose-100 text-rose-800"
+                            : "bg-slate-100 text-slate-600";
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => selectQueuedInvoice(item)}
+                        className={`flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs transition-colors ${
+                          isActive
+                            ? "border-slate-900 bg-slate-900 text-white"
+                            : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                        }`}
+                      >
+                        <span className="max-w-[180px] truncate font-medium">
+                          {item.filename}
+                        </span>
+                        <span
+                          className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
+                            isActive ? "bg-white/20 text-white" : badgeClass
+                          }`}
+                        >
+                          {item.status.replace("_", " ")}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 

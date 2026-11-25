@@ -189,6 +189,8 @@ def run_dataset_experiment(provider: str, run_name: str) -> int:
             "gl_code": gl.gl_code,
             "status": validation.status,
             "confidence": round(invoice.extraction_confidence, 4),
+            "explanation": gl.explanation,
+            "line_items": [item.description for item in invoice.line_items],
         }
 
     def gl_accuracy_evaluator(*, output, expected_output, **kwargs):
@@ -201,11 +203,31 @@ def run_dataset_experiment(provider: str, run_name: str) -> int:
         matched = output.get("status") in valid_set
         return Evaluation(name="status_match", value=1.0 if matched else 0.0)
 
+    def rationale_quality_evaluator(*, output, **kwargs):
+        explanation = (output.get("explanation") or "").strip()
+        items = output.get("line_items") or []
+        if not explanation:
+            return Evaluation(name="rationale_quality", value=0.0, comment="Empty GL explanation")
+        item_tokens = {
+            tok.lower().strip(",.;:()")
+            for desc in items
+            for tok in desc.split()
+            if len(tok) >= 4
+        }
+        exp_lower = explanation.lower()
+        grounded = any(tok in exp_lower for tok in item_tokens)
+        score = 1.0 if grounded and len(explanation) >= 20 else 0.5
+        return Evaluation(
+            name="rationale_quality",
+            value=score,
+            comment="Grounded in invoice line items" if grounded else "Generic rationale",
+        )
+
     result = dataset.run_experiment(
         name=run_name,
         description=f"CRE-Agent golden invoice evaluation (provider={provider})",
         task=task,
-        evaluators=[gl_accuracy_evaluator, status_evaluator],
+        evaluators=[gl_accuracy_evaluator, status_evaluator, rationale_quality_evaluator],
         metadata={"provider": provider, "environment": settings.langfuse_environment},
     )
     client.flush()
