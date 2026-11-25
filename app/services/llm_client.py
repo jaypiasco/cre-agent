@@ -149,6 +149,22 @@ class TraceContext:
             except Exception as exc:
                 logger.warning("Failed to log Langfuse span '%s': %s", name, exc)
 
+    def resolve_prompt(self, name: str, default_prompt: str) -> Tuple[str, Any]:
+        """Fetch a managed Langfuse prompt with automatic fallback to local constant."""
+        if self._langfuse is None:
+            return default_prompt, None
+        try:
+            prompt_obj = self._langfuse.get_prompt(
+                name,
+                label="latest",
+                fallback=default_prompt,
+            )
+            compiled = prompt_obj.compile() if hasattr(prompt_obj, "compile") else default_prompt
+            return compiled or default_prompt, prompt_obj
+        except Exception as exc:
+            logger.warning("Failed to fetch Langfuse prompt '%s'; using local default: %s", name, exc)
+            return default_prompt, None
+
     def log_generation(
         self,
         name: str,
@@ -158,6 +174,7 @@ class TraceContext:
         usage: Optional[Dict[str, int]] = None,
         metadata: Optional[Dict[str, Any]] = None,
         latency_ms: float = 0.0,
+        prompt: Any = None,
     ) -> None:
         """Record a child generation span in Langfuse or structured local logs."""
         logger.info(
@@ -172,15 +189,18 @@ class TraceContext:
             try:
                 meta = {**(metadata or {}), "latency_ms": round(latency_ms, 1)}
                 if self._is_otel_span:
-                    gen = self._trace.start_observation(
-                        name=name,
-                        as_type="generation",
-                        model=model,
-                        input=input_payload,
-                        output=output_payload,
-                        usage_details=usage,
-                        metadata=meta,
-                    )
+                    obs_kwargs: Dict[str, Any] = {
+                        "name": name,
+                        "as_type": "generation",
+                        "model": model,
+                        "input": input_payload,
+                        "output": output_payload,
+                        "usage_details": usage,
+                        "metadata": meta,
+                    }
+                    if prompt is not None and not getattr(prompt, "is_fallback", False):
+                        obs_kwargs["prompt"] = prompt
+                    gen = self._trace.start_observation(**obs_kwargs)
                     gen.end()
                 else:
                     self._trace.generation(
@@ -315,6 +335,10 @@ class LLMService:
         provider = self.settings.llm_provider
         start = time.perf_counter()
 
+        _, extraction_prompt_obj = trace.resolve_prompt(
+            "cre-invoice-extraction", EXTRACTION_SYSTEM_PROMPT
+        )
+
         if provider == "mock":
             model_name = "mock-extractor-v1"
             invoice = self._mock_extract(parsed_pdf)
@@ -356,6 +380,7 @@ class LLMService:
             usage=usage,
             metadata={"extraction_confidence": invoice.extraction_confidence},
             latency_ms=latency_ms,
+            prompt=extraction_prompt_obj,
         )
         return invoice, model_name
 
@@ -368,6 +393,8 @@ class LLMService:
         """Match the extracted invoice to the best CRE Chart of Accounts GL code."""
         provider = self.settings.llm_provider
         start = time.perf_counter()
+
+        _, gl_prompt_obj = trace.resolve_prompt("cre-gl-coding", GL_SYSTEM_PROMPT)
 
         if provider == "mock":
             model_name = "mock-gl-matcher-v1"
@@ -397,6 +424,7 @@ class LLMService:
             usage=usage,
             metadata={"gl_code": recommendation.gl_code},
             latency_ms=latency_ms,
+            prompt=gl_prompt_obj,
         )
         return recommendation
 
@@ -421,8 +449,9 @@ class LLMService:
                 raise ValueError("GEMINI_API_KEY or GEMINI_API_KEYS is required when LLM_PROVIDER=gemini.")
             key = keys[0]
         from google import genai
+        from google.genai import types
 
-        return genai.Client(api_key=key)
+        return genai.Client(api_key=key, http_options=types.HttpOptions(timeout=20_000))
 
     def _call_gemini_with_rotation(self, fn: Callable[[Any], T]) -> T:
         keys = self.settings.gemini_key_list

@@ -145,6 +145,74 @@ def run_eval(provider: str) -> int:
     return 0 if all_passed else 1
 
 
+def run_dataset_experiment(provider: str, run_name: str) -> int:
+    """Run a Langfuse Dataset Experiment against `cre-golden-invoices`."""
+    from langfuse import Evaluation, Langfuse
+
+    settings = Settings(llm_provider=provider)  # type: ignore[arg-type]
+    if not settings.langfuse_enabled:
+        raise RuntimeError("Langfuse credentials are required for --dataset-run.")
+
+    client = Langfuse(
+        public_key=settings.langfuse_public_key,
+        secret_key=settings.langfuse_secret_key,
+        base_url=settings.langfuse_base_url or settings.langfuse_host,
+        environment=settings.langfuse_environment,
+    )
+    dataset = client.get_dataset("cre-golden-invoices")
+    llm = LLMService(settings=settings)
+    coa = load_chart_of_accounts()
+
+    def task(*, item, **kwargs):
+        filename = item.input["filename"]
+        pdf_path = SAMPLES_DIR / filename
+        parsed = parse_pdf(
+            pdf_bytes=pdf_path.read_bytes(),
+            min_chars_per_page=settings.pdf_min_chars_per_page,
+            max_vision_pages=settings.pdf_max_vision_pages,
+            dpi=settings.pdf_render_dpi,
+        )
+        dummy_trace = TraceContext(
+            settings=Settings(llm_provider=provider, langfuse_public_key="", langfuse_secret_key=""),  # type: ignore[arg-type]
+            filename=filename,
+            mode=parsed.mode,
+        )
+        invoice, _ = llm.extract_invoice(parsed, dummy_trace)
+        validation = validate_invoice(
+            invoice,
+            confidence_threshold=settings.confidence_threshold,
+            math_tolerance=settings.math_tolerance,
+        )
+        gl = llm.match_gl_account(invoice, coa, dummy_trace)
+        return {
+            "mode": parsed.mode,
+            "gl_code": gl.gl_code,
+            "status": validation.status,
+            "confidence": round(invoice.extraction_confidence, 4),
+        }
+
+    def gl_accuracy_evaluator(*, output, expected_output, **kwargs):
+        matched = output.get("gl_code") == expected_output.get("gl_code")
+        return Evaluation(name="gl_code_match", value=1.0 if matched else 0.0)
+
+    def status_evaluator(*, output, expected_output, **kwargs):
+        exp_status = expected_output.get("status")
+        valid_set = {"VALID", "NEEDS_REVIEW"} if exp_status == "VALID_OR_NEEDS_REVIEW" else {exp_status}
+        matched = output.get("status") in valid_set
+        return Evaluation(name="status_match", value=1.0 if matched else 0.0)
+
+    result = dataset.run_experiment(
+        name=run_name,
+        description=f"CRE-Agent golden invoice evaluation (provider={provider})",
+        task=task,
+        evaluators=[gl_accuracy_evaluator, status_evaluator],
+        metadata={"provider": provider, "environment": settings.langfuse_environment},
+    )
+    client.flush()
+    print(f"Langfuse Dataset Experiment '{run_name}' completed: {len(result.item_results)} items.")
+    return 0
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Evaluate CRE-Agent pipeline on sample PDFs.")
     parser.add_argument(
@@ -153,7 +221,14 @@ def main() -> None:
         choices=["mock", "gemini", "openai", "anthropic"],
         help="LLM provider to evaluate (default: LLM_PROVIDER env or mock).",
     )
+    parser.add_argument(
+        "--dataset-run",
+        default="",
+        help="Optional Langfuse Dataset Experiment run name against 'cre-golden-invoices'.",
+    )
     args = parser.parse_args()
+    if args.dataset_run:
+        sys.exit(run_dataset_experiment(args.provider, args.dataset_run))
     sys.exit(run_eval(args.provider))
 
 
