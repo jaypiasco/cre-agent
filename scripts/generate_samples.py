@@ -1,4 +1,4 @@
-"""Generate 3 realistic CRE vendor invoice PDFs (2 text-based, 1 scanned image-only)."""
+"""Generate 4 realistic CRE vendor invoice PDFs (2 clean text, 1 scanned, 1 math-mismatch)."""
 
 import io
 from pathlib import Path
@@ -137,7 +137,24 @@ def main() -> None:
     scanned_bytes = _convert_to_scanned_pdf(landscaping_text_bytes)
     (SAMPLES_DIR / "landscaping_greenview_scanned.pdf").write_bytes(scanned_bytes)
 
-    print(f"Generated 3 sample PDFs in {SAMPLES_DIR}")
+    # 4. Text-based Utility Invoice with intentional math mismatch ($2,250 + $180 = $2,430 != $2,580)
+    utility_error_bytes = _build_invoice_pdf_bytes(
+        vendor="Metro Municipal Water & Power",
+        invoice_no="MMWP-2026-9914",
+        inv_date="2026-11-18",
+        due_date="2026-12-18",
+        property_addr="3100 Oak Lawn Ave, Dallas, TX 75219",
+        rows=[
+            ["Commercial water & sewer service (Oct-Nov)", "1.00", "$820.00", "$820.00"],
+            ["Common area electric demand & usage", "1.00", "$1,430.00", "$1,430.00"],
+        ],
+        subtotal="$2,250.00",
+        tax="$180.00",
+        total="$2,580.00",
+    )
+    (SAMPLES_DIR / "utility_math_error_sample.pdf").write_bytes(utility_error_bytes)
+
+    print(f"Generated 4 sample PDFs in {SAMPLES_DIR}")
 
 
 if __name__ == "__main__":
