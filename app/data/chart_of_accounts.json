@@ -1,0 +1,47 @@
+[
+  {
+    "gl_code": "5100",
+    "account_name": "Property Taxes",
+    "examples": "County tax assessments, municipal property tax bills"
+  },
+  {
+    "gl_code": "5200",
+    "account_name": "Property Insurance",
+    "examples": "General liability, commercial property/hazard insurance"
+  },
+  {
+    "gl_code": "6100",
+    "account_name": "HVAC & Mechanical R&M",
+    "examples": "Chiller repair, rooftop unit (RTU) servicing, thermostat/ductwork"
+  },
+  {
+    "gl_code": "6200",
+    "account_name": "Roofing & Building Exterior",
+    "examples": "Roof leak repair, membrane patching, gutter/flashing work"
+  },
+  {
+    "gl_code": "6300",
+    "account_name": "Landscaping & Grounds",
+    "examples": "Lawn care, irrigation, parking lot sweeping, snow removal"
+  },
+  {
+    "gl_code": "6400",
+    "account_name": "Janitorial & Cleaning",
+    "examples": "Common area cleaning, porter services, waste/dumpster fees"
+  },
+  {
+    "gl_code": "6500",
+    "account_name": "Utilities (Electric/Water/Gas)",
+    "examples": "Municipal water, commercial electric, natural gas"
+  },
+  {
+    "gl_code": "6600",
+    "account_name": "Security & Fire/Life Safety",
+    "examples": "Alarm monitoring, sprinkler inspection, fire extinguisher service"
+  },
+  {
+    "gl_code": "7100",
+    "account_name": "Legal & Professional Fees",
+    "examples": "Lease drafting, eviction counsel, CPA/audit services"
+  }
+]
