@@ -33,8 +33,8 @@ This guide covers deploying **CRE-Agent** for production/portfolio use with zero
    - Port: `8000`
    - Health check path: `/health`
    - Environment variables:
-     - `LLM_PROVIDER=gemini` (or `mock` for key-free demo)
-     - `GEMINI_API_KEY=<your-key>`
+     - `LLM_PROVIDER=mock` *(recommended for zero-cost live interview demos — pairs with the UI's floating **BYOK** switcher so interviewers can test the 4 built-in sample PDFs immediately or plug in their own key)*
+     - Or `LLM_PROVIDER=gemini` with `GEMINI_API_KEY=<your-key>`
      - `LANGFUSE_PUBLIC_KEY=<optional>`
      - `LANGFUSE_SECRET_KEY=<optional>`
      - `LANGFUSE_HOST=https://cloud.langfuse.com`

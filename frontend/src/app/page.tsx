@@ -47,6 +47,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { LlmModeFloating } from "@/components/llm-mode-floating";
 import {
   analyzeInvoicePdf,
   exportYardiInvoice,
@@ -56,6 +57,8 @@ import {
 import type {
   ChartOfAccountsEntry,
   InvoiceAnalysisResponse,
+  LlmClientConfig,
+  LlmMode,
   YardiExportResponse,
 } from "@/lib/types";
 
@@ -145,9 +148,17 @@ function triggerDownload(content: string, filename: string, mimeType: string) {
   URL.revokeObjectURL(url);
 }
 
+const LLM_CONFIG_STORAGE_KEY = "cre_agent_llm_config";
+
 export default function CreWorkbenchPage() {
   const [apiOnline, setApiOnline] = useState<boolean | null>(null);
   const [langfuseEnabled, setLangfuseEnabled] = useState<boolean>(false);
+  const [serverProvider, setServerProvider] = useState<LlmMode | null>(null);
+  const [llmConfig, setLlmConfig] = useState<LlmClientConfig>({
+    mode: "mock",
+    apiKey: "",
+  });
+  const [llmPanelOpen, setLlmPanelOpen] = useState<boolean>(false);
   const [coa, setCoa] = useState<ChartOfAccountsEntry[]>(FALLBACK_COA);
 
   const [activeFilename, setActiveFilename] = useState<string>("");
@@ -171,11 +182,37 @@ export default function CreWorkbenchPage() {
 
   useEffect(() => {
     let mounted = true;
+    const hydrateTimer = window.setTimeout(() => {
+      if (!mounted) return;
+      try {
+        const saved = sessionStorage.getItem(LLM_CONFIG_STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved) as Partial<LlmClientConfig>;
+          if (
+            parsed.mode === "mock" ||
+            parsed.mode === "gemini" ||
+            parsed.mode === "openai" ||
+            parsed.mode === "anthropic"
+          ) {
+            setLlmConfig({
+              mode: parsed.mode,
+              apiKey: typeof parsed.apiKey === "string" ? parsed.apiKey : "",
+            });
+          }
+        }
+      } catch {
+        // Ignore invalid sessionStorage data
+      }
+    }, 0);
+
     fetchHealth()
       .then((h) => {
         if (!mounted) return;
         setApiOnline(h.status === "ok");
         setLangfuseEnabled(Boolean(h.langfuse_enabled));
+        if (h.llm_provider) {
+          setServerProvider(h.llm_provider);
+        }
       })
       .catch(() => {
         if (!mounted) return;
@@ -194,6 +231,7 @@ export default function CreWorkbenchPage() {
 
     return () => {
       mounted = false;
+      window.clearTimeout(hydrateTimer);
     };
   }, []);
 
@@ -212,8 +250,24 @@ export default function CreWorkbenchPage() {
     }
   }, []);
 
+  const handleLlmConfigChange = useCallback((next: LlmClientConfig) => {
+    setLlmConfig(next);
+    try {
+      sessionStorage.setItem(LLM_CONFIG_STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      // Ignore storage quota errors
+    }
+  }, []);
+
   const runBatchAnalysis = useCallback(async (files: File[]) => {
     if (files.length === 0) return;
+    if (llmConfig.mode !== "mock" && !llmConfig.apiKey.trim()) {
+      setErrorMsg(
+        `Enter a ${llmConfig.mode} API key in the bottom-right settings or switch to Mock Demo.`
+      );
+      setLlmPanelOpen(true);
+      return;
+    }
     setErrorMsg(null);
     setExportResult(null);
     setHumanApproved(false);
@@ -241,7 +295,7 @@ export default function CreWorkbenchPage() {
       );
 
       try {
-        const result = await analyzeInvoicePdf(file);
+        const result = await analyzeInvoicePdf(file, llmConfig);
         const nextStatus =
           result.validation.status === "VALID" ? "valid" : "needs_review";
         setQueue((prev) =>
@@ -271,7 +325,7 @@ export default function CreWorkbenchPage() {
 
     setAnalyzingFilename("");
     setIsAnalyzing(false);
-  }, []);
+  }, [llmConfig]);
 
   const runAnalysis = useCallback(
     async (file: File) => {
@@ -1005,6 +1059,14 @@ export default function CreWorkbenchPage() {
           </div>
         )}
       </main>
+
+      <LlmModeFloating
+        config={llmConfig}
+        serverProvider={serverProvider}
+        open={llmPanelOpen}
+        onOpenChange={setLlmPanelOpen}
+        onChange={handleLlmConfigChange}
+      />
     </div>
   );
 }

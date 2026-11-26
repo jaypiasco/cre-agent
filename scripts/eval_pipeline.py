@@ -5,6 +5,7 @@ import os
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
@@ -18,7 +19,7 @@ from app.services.validator import validate_invoice  # noqa: E402
 
 SAMPLES_DIR = ROOT_DIR / "samples"
 
-EXPECTED = {
+EXPECTED: dict[str, dict[str, Any]] = {
     "hvac_apex_inv_88412.pdf": {
         "mode": "text",
         "gl_code": "6100",

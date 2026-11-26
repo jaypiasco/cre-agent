@@ -38,7 +38,8 @@ def parse_pdf(
             raise ValueError("PDF contains zero pages.")
 
         page_texts: List[str] = []
-        for page in doc:
+        for page_idx in range(page_count):
+            page = doc[page_idx]
             page_texts.append(page.get_text("text").strip())
 
         combined_text = "\n\n".join(t for t in page_texts if t)
@@ -54,9 +55,8 @@ def parse_pdf(
 
         # Scanned or image-only PDF: render up to max_vision_pages as PNGs
         images_b64: List[str] = []
-        for idx, page in enumerate(doc):
-            if idx >= max_vision_pages:
-                break
+        for page_idx in range(min(page_count, max_vision_pages)):
+            page = doc[page_idx]
             pixmap = page.get_pixmap(dpi=dpi)
             png_bytes = pixmap.tobytes("png")
             images_b64.append(base64.b64encode(png_bytes).decode("ascii"))

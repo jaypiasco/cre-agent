@@ -11,7 +11,15 @@ from app.services.llm_client import LLMService, TraceContext, record_hitl_feedba
 
 
 def _mock_settings() -> Settings:
-    return Settings(llm_provider="mock", langfuse_public_key="", langfuse_secret_key="")
+    return Settings(
+        llm_provider="mock",
+        gemini_api_key="",
+        gemini_api_keys="",
+        openai_api_key="",
+        anthropic_api_key="",
+        langfuse_public_key="",
+        langfuse_secret_key="",
+    )
 
 
 app.dependency_overrides[get_settings] = _mock_settings
@@ -243,3 +251,56 @@ def test_trace_context_logs_otel_spans_scores_and_finalize():
     assert fake_root.scores[0]["name"] == "math_gate_passed"
     assert fake_root.updated == {"output": {"gl_code": "6100"}, "metadata": None}
     assert fake_root.ended is True
+
+
+def test_analyze_with_mock_header_override():
+    pdf_bytes = _make_text_pdf(
+        "Apex Commercial HVAC LLC\nInvoice INV-88412\nRTU-3 condenser coil cleaning $1450.00\n"
+        "Chiller economizer damper actuator replacement $840.00\nTotal Due: $2450.00"
+    )
+    resp = client.post(
+        "/api/v1/invoices/analyze",
+        headers={"X-LLM-Provider": "mock"},
+        files={"file": ("hvac.pdf", io.BytesIO(pdf_bytes), "application/pdf")},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["model_used"] == "mock-extractor-v1"
+    assert body["validation"]["status"] == "VALID"
+
+
+def test_analyze_with_byok_provider_missing_key_returns_400():
+    pdf_bytes = _make_text_pdf(
+        "Apex Commercial HVAC LLC\nInvoice INV-88412\nTotal Due: $2450.00"
+    )
+    resp = client.post(
+        "/api/v1/invoices/analyze",
+        headers={"X-LLM-Provider": "gemini"},
+        files={"file": ("hvac.pdf", io.BytesIO(pdf_bytes), "application/pdf")},
+    )
+    assert resp.status_code == 400
+    assert "API key is required" in resp.json()["detail"]
+
+
+def test_analyze_with_invalid_provider_header_returns_400():
+    pdf_bytes = _make_text_pdf(
+        "Apex Commercial HVAC LLC\nInvoice INV-88412\nTotal Due: $2450.00"
+    )
+    resp = client.post(
+        "/api/v1/invoices/analyze",
+        headers={"X-LLM-Provider": "unknown-provider"},
+        files={"file": ("hvac.pdf", io.BytesIO(pdf_bytes), "application/pdf")},
+    )
+    assert resp.status_code == 400
+    assert "Unsupported X-LLM-Provider" in resp.json()["detail"]
+
+
+def test_analyze_rejects_oversized_pdf(monkeypatch):
+    monkeypatch.setattr("app.main.MAX_PDF_BYTES", 64)
+    pdf_bytes = _make_text_pdf("Apex Commercial HVAC LLC\nInvoice INV-88412\nTotal Due: $2450.00")
+    resp = client.post(
+        "/api/v1/invoices/analyze",
+        files={"file": ("large.pdf", io.BytesIO(pdf_bytes), "application/pdf")},
+    )
+    assert resp.status_code == 413
+    assert "10 MB" in resp.json()["detail"]

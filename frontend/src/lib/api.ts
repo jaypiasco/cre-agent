@@ -2,6 +2,7 @@ import type {
   ChartOfAccountsEntry,
   HealthResponse,
   InvoiceAnalysisResponse,
+  LlmClientConfig,
   YardiExportPayload,
   YardiExportResponse,
 } from "./types";
@@ -35,13 +36,23 @@ export async function fetchChartOfAccounts(): Promise<ChartOfAccountsEntry[]> {
 }
 
 export async function analyzeInvoicePdf(
-  file: File
+  file: File,
+  llmConfig?: LlmClientConfig
 ): Promise<InvoiceAnalysisResponse> {
   const formData = new FormData();
   formData.append("file", file);
 
+  const headers: Record<string, string> = {};
+  if (llmConfig) {
+    headers["X-LLM-Provider"] = llmConfig.mode;
+    if (llmConfig.mode !== "mock" && llmConfig.apiKey.trim()) {
+      headers["X-LLM-Api-Key"] = llmConfig.apiKey.trim();
+    }
+  }
+
   const res = await fetch(`${API_BASE_URL}/api/v1/invoices/analyze`, {
     method: "POST",
+    headers,
     body: formData,
   });
   if (!res.ok) throw new Error(await parseError(res));
