@@ -1,7 +1,7 @@
 """Deterministic arithmetic and completeness validation gates."""
 
 from decimal import Decimal
-from typing import List
+from typing import List, Literal
 
 from app.models import ExtractedInvoice, ValidationReport
 
@@ -80,7 +80,9 @@ def validate_invoice(
             f"{confidence_threshold:.0%} threshold). Manual review required."
         )
 
-    status = "VALID" if (math_valid and not warnings) else "NEEDS_REVIEW"
+    status: Literal["VALID", "NEEDS_REVIEW"] = (
+        "VALID" if (math_valid and not warnings) else "NEEDS_REVIEW"
+    )
 
     return ValidationReport(
         math_valid=math_valid,

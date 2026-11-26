@@ -1,13 +1,14 @@
 """Unit tests for deterministic arithmetic and completeness validation gates."""
 
 from datetime import date
+from typing import Any
 
 from app.models import ExtractedInvoice, InvoiceLineItem
 from app.services.validator import validate_invoice
 
 
-def _base_invoice(**overrides) -> ExtractedInvoice:
-    data = {
+def _base_invoice(**overrides: Any) -> ExtractedInvoice:
+    data: dict[str, Any] = {
         "vendor_name": "Apex Commercial HVAC LLC",
         "invoice_number": "INV-88412",
         "invoice_date": date(2026, 11, 10),
