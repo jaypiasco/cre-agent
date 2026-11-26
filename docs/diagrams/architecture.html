@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CRE-Agent Architecture</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:   #f8fafc;
+      --color-ink:     #0f172a;
+      --color-muted:   #475569;
+      --color-accent:  #047857;
+      --font-sans:     'Geist', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', Georgia, serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+
+    .frame { max-width: 1200px; width: 100%; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      color: var(--color-ink);
+      margin-bottom: 1.5rem;
+    }
+
+    svg { width: 100%; min-width: 960px; display: block; }
+    @media print {
+      .diagram-container { overflow-x: visible; }
+      svg { min-width: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Flowchart · CRE-Agent</p>
+    <h1>Invoice Extraction, Decimal Math Gate &amp; HITL Export</h1>
+
+    <div class="diagram-container">
+      <svg viewBox="0 0 960 600" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="cre-arch-title cre-arch-desc">
+        <title id="cre-arch-title">CRE-Agent Invoice Processing Pipeline</title>
+        <desc id="cre-arch-desc">Flowchart showing PDF invoice ingestion routing between fast text extraction and PyMuPDF vision extraction, passing through a deterministic Decimal math gate and GL account matcher before human-in-the-loop approval and Yardi export.</desc>
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#475569"/></marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#047857"/></marker>
+          <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2563eb"/></marker>
+        </defs>
+
+        <rect width="100%" height="100%" fill="#f8fafc"/>
+
+        <!-- Arrows (drawn before nodes) -->
+        <!-- 1. Start -> Text Decision -->
+        <line x1="480" y1="80" x2="480" y2="112" stroke="#475569" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+        <!-- 2. Text Decision -> Fast Model (YES, right) -->
+        <line x1="592" y1="144" x2="672" y2="144" stroke="#047857" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+        <rect x="614" y="122" width="36" height="14" rx="2" fill="#f8fafc"/>
+        <text x="632" y="132" fill="#047857" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">YES</text>
+
+        <!-- 3. Text Decision -> Vision Model (NO, down) -->
+        <line x1="480" y1="176" x2="480" y2="204" stroke="#475569" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <rect x="490" y="182" width="28" height="14" rx="2" fill="#f8fafc"/>
+        <text x="504" y="192" fill="#64748b" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">NO</text>
+
+        <!-- 4. Vision Model -> Decimal Math Gate -->
+        <line x1="480" y1="256" x2="480" y2="288" stroke="#475569" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+        <!-- 5. Fast Model -> Decimal Math Gate (L-path into right edge) -->
+        <path d="M 776,168 V 308 Q 776,316 768,316 H 584" fill="none" stroke="#047857" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+
+        <!-- 6. Decimal Math Gate -> GL Account Matcher (left) -->
+        <line x1="380" y1="316" x2="304" y2="316" stroke="#047857" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+
+        <!-- 7. GL Account Matcher -> Validation Decision (down) -->
+        <line x1="200" y1="340" x2="200" y2="368" stroke="#475569" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+        <!-- 8. Validation Decision -> HITL Workbench (VALID, right) -->
+        <line x1="308" y1="400" x2="376" y2="400" stroke="#047857" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+        <rect x="318" y="378" width="48" height="14" rx="2" fill="#f8fafc"/>
+        <text x="342" y="388" fill="#047857" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">VALID</text>
+
+        <!-- 9. Validation Decision -> HITL Workbench (NEEDS_REVIEW, down then right then up) -->
+        <path d="M 200,432 V 476 Q 200,484 208,484 H 472 Q 480,484 480,476 V 428" fill="none" stroke="#475569" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+        <rect x="296" y="462" width="96" height="14" rx="2" fill="#f8fafc"/>
+        <text x="344" y="472" fill="#64748b" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">NEEDS_REVIEW</text>
+
+        <!-- 10. HITL Workbench -> Yardi Export (APPROVED, right) -->
+        <line x1="580" y1="400" x2="672" y2="400" stroke="#2563eb" stroke-width="1.4" marker-end="url(#arrow-link)"/>
+        <rect x="594" y="378" width="64" height="14" rx="2" fill="#f8fafc"/>
+        <text x="626" y="388" fill="#2563eb" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">APPROVED</text>
+
+        <!-- Nodes -->
+        <!-- 1. PDF Invoice Upload (Start Oval) -->
+        <rect x="380" y="32" width="200" height="48" rx="24" fill="#f8fafc"/>
+        <rect x="380" y="32" width="200" height="48" rx="24" fill="#ffffff" stroke="#0f172a" stroke-width="1.2"/>
+        <text x="480" y="54" fill="#0f172a" font-size="12" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">PDF Invoice Upload</text>
+        <text x="480" y="68" fill="#475569" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">/api/v1/invoices/analyze</text>
+
+        <!-- 2. Text >= 50 chars/pg? (Decision Diamond) -->
+        <polygon points="480,116 592,144 480,172 368,144" fill="#f8fafc"/>
+        <polygon points="480,116 592,144 480,172 368,144" fill="#ffffff" stroke="#0f172a" stroke-width="1.2"/>
+        <text x="480" y="148" fill="#0f172a" font-size="11" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Text &gt;= 50 chars/pg?</text>
+
+        <!-- 3. Fast Model Extraction -->
+        <rect x="676" y="120" width="200" height="48" rx="6" fill="#f8fafc"/>
+        <rect x="676" y="120" width="200" height="48" rx="6" fill="#ffffff" stroke="#0f172a" stroke-width="1"/>
+        <text x="776" y="142" fill="#0f172a" font-size="12" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Fast Model Extraction</text>
+        <text x="776" y="156" fill="#475569" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">text structured output</text>
+
+        <!-- 4. Vision Model Extraction -->
+        <rect x="380" y="208" width="200" height="48" rx="6" fill="#f8fafc"/>
+        <rect x="380" y="208" width="200" height="48" rx="6" fill="#ffffff" stroke="#0f172a" stroke-width="1"/>
+        <text x="480" y="230" fill="#0f172a" font-size="12" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Vision Model Extraction</text>
+        <text x="480" y="244" fill="#475569" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">PyMuPDF PNG · 150 DPI</text>
+
+        <!-- 5. Deterministic Decimal Math Gate (Focal Accent 1) -->
+        <rect x="380" y="292" width="200" height="48" rx="6" fill="#f8fafc"/>
+        <rect x="380" y="292" width="200" height="48" rx="6" fill="rgba(5,150,105,0.08)" stroke="#047857" stroke-width="1.4"/>
+        <text x="480" y="314" fill="#0f172a" font-size="12" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Decimal Math Gate</text>
+        <text x="480" y="328" fill="#047857" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">qty * price == total ±$0.02</text>
+
+        <!-- 6. GL Account Matcher -->
+        <rect x="100" y="292" width="200" height="48" rx="6" fill="#f8fafc"/>
+        <rect x="100" y="292" width="200" height="48" rx="6" fill="#ffffff" stroke="#0f172a" stroke-width="1"/>
+        <text x="200" y="314" fill="#0f172a" font-size="12" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">GL Account Matcher</text>
+        <text x="200" y="328" fill="#475569" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">COA 5100–7100 + Langfuse</text>
+
+        <!-- 7. Math Valid & Conf >= 90%? (Decision Diamond) -->
+        <polygon points="200,372 308,400 200,428 92,400" fill="#f8fafc"/>
+        <polygon points="200,372 308,400 200,428 92,400" fill="#ffffff" stroke="#0f172a" stroke-width="1.2"/>
+        <text x="200" y="404" fill="#0f172a" font-size="11" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Valid &amp; Conf &gt;= 90%?</text>
+
+        <!-- 8. HITL Workbench (Focal Accent 2) -->
+        <rect x="380" y="376" width="200" height="48" rx="6" fill="#f8fafc"/>
+        <rect x="380" y="376" width="200" height="48" rx="6" fill="rgba(5,150,105,0.08)" stroke="#047857" stroke-width="1.4"/>
+        <text x="480" y="398" fill="#0f172a" font-size="12" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">HITL Workbench</text>
+        <text x="480" y="412" fill="#047857" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">Next.js + shadcn/ui</text>
+
+        <!-- 9. Yardi CSV & Audit JSON (End Oval) -->
+        <rect x="676" y="376" width="216" height="48" rx="24" fill="#f8fafc"/>
+        <rect x="676" y="376" width="216" height="48" rx="24" fill="#ffffff" stroke="#2563eb" stroke-width="1.2"/>
+        <text x="784" y="398" fill="#0f172a" font-size="12" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Yardi CSV &amp; Audit JSON</text>
+        <text x="784" y="412" fill="#2563eb" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">/api/v1/invoices/export</text>
+
+        <!-- Legend strip -->
+        <line x1="36" y1="532" x2="924" y2="532" stroke="rgba(15,23,42,0.12)" stroke-width="0.8"/>
+        <text x="36" y="556" fill="#475569" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" letter-spacing="0.14em">LEGEND</text>
+
+        <rect x="116" y="546" width="14" height="14" rx="7" fill="#ffffff" stroke="#0f172a" stroke-width="1"/>
+        <text x="138" y="556" fill="#475569" font-size="9" font-family="'Geist Mono', ui-monospace, monospace">Start / Export</text>
+
+        <rect x="256" y="546" width="14" height="14" rx="3" fill="rgba(5,150,105,0.08)" stroke="#047857" stroke-width="1.2"/>
+        <text x="278" y="556" fill="#475569" font-size="9" font-family="'Geist Mono', ui-monospace, monospace">Verification Gate</text>
+
+        <line x1="416" y1="553" x2="444" y2="553" stroke="#047857" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+        <text x="454" y="556" fill="#475569" font-size="9" font-family="'Geist Mono', ui-monospace, monospace">Happy Path</text>
+
+        <line x1="556" y1="553" x2="584" y2="553" stroke="#475569" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+        <text x="594" y="556" fill="#475569" font-size="9" font-family="'Geist Mono', ui-monospace, monospace">Review Escalation</text>
+
+        <line x1="732" y1="553" x2="760" y2="553" stroke="#2563eb" stroke-width="1.4" marker-end="url(#arrow-link)"/>
+        <text x="770" y="556" fill="#475569" font-size="9" font-family="'Geist Mono', ui-monospace, monospace">Approved Export</text>
+      </svg>
+    </div>
+  </div>
+</body>
+</html>
