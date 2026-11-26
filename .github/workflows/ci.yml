@@ -26,6 +26,9 @@ jobs:
       - name: Lint with Ruff
         run: ruff check app scripts tests
 
+      - name: Type check with mypy
+        run: mypy app scripts tests
+
       - name: Run unit & API tests
         run: pytest -v
 

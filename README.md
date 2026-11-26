@@ -1,6 +1,6 @@
 # CRE-Agent: Automated Invoice Extraction & GL Coding Assistant
 
-[![CI](https://github.com/johnp/cre-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/johnp/cre-agent/actions/workflows/ci.yml)
+[![CI](https://github.com/jaypiasco/cre-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/jaypiasco/cre-agent/actions/workflows/ci.yml)
 ![Python 3.13](https://img.shields.io/badge/Python-3.13-blue.svg)
 ![Next.js](https://img.shields.io/badge/Next.js-App%20Router-black.svg)
 ![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)

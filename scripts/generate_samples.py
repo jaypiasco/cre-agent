@@ -68,7 +68,8 @@ def _convert_to_scanned_pdf(text_pdf_bytes: bytes) -> bytes:
     """Rasterize a PDF to a PNG image and wrap it in a new PDF with zero text layer."""
     src = fitz.open(stream=text_pdf_bytes, filetype="pdf")
     dst = fitz.open()
-    for page in src:
+    for page_idx in range(len(src)):
+        page = src[page_idx]
         pix = page.get_pixmap(dpi=150)
         img_pdf = fitz.open()
         rect = fitz.Rect(0, 0, page.rect.width, page.rect.height)

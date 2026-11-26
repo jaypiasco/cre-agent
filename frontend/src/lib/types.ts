@@ -33,9 +33,17 @@ export interface ValidationReport {
   warnings: string[];
 }
 
+export type LlmMode = "mock" | "gemini" | "openai" | "anthropic";
+
+export interface LlmClientConfig {
+  mode: LlmMode;
+  apiKey: string;
+}
+
 export interface InvoiceAnalysisResponse {
   trace_id: string | null;
   extraction_mode: "text" | "vision";
+  model_used?: string;
   invoice: ExtractedInvoice;
   gl_recommendation: GLRecommendation;
   validation: ValidationReport;
@@ -69,5 +77,6 @@ export interface YardiExportResponse {
 
 export interface HealthResponse {
   status: string;
+  llm_provider?: LlmMode;
   langfuse_enabled: boolean;
 }
