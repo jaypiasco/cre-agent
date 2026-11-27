@@ -37,7 +37,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -976,39 +975,58 @@ export default function CreWorkbenchPage() {
 
                   <Separator />
 
-                  {/* Explicit HITL Gate Switch */}
-                  <div
-                    className={`flex items-center justify-between rounded-lg border p-3.5 transition-colors ${
-                      humanApproved
-                        ? "border-emerald-200 bg-emerald-50/70"
-                        : "border-slate-200 bg-slate-50/70"
-                    }`}
-                  >
-                    <div className="space-y-0.5 pr-3">
-                      <Label
-                        htmlFor="hitl-switch"
-                        className="flex items-center gap-1.5 text-sm font-semibold text-slate-900"
-                      >
-                        <ShieldCheck
-                          className={`h-4 w-4 ${
-                            humanApproved
-                              ? "text-emerald-600"
-                              : "text-slate-400"
-                          }`}
-                        />
-                        Human Approval:{" "}
-                        {humanApproved ? "Approved" : "Pending"}
-                      </Label>
-                      <p className="text-xs text-slate-500">
-                        Required before generating Yardi CSV or audit JSON.
-                      </p>
+                  {/* HITL Approval Gate */}
+                  {humanApproved ? (
+                    <div className="rounded-lg border border-emerald-200 bg-emerald-50/80 p-4">
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-100">
+                          <ShieldCheck className="h-5 w-5 text-emerald-600" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold text-emerald-900">
+                            Approved by {approvedBy.trim() || "ap_reviewer"}
+                          </p>
+                          <p className="mt-0.5 text-xs text-emerald-700">
+                            This invoice is cleared for Yardi export. Downloads
+                            are now unlocked.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setHumanApproved(false)}
+                          className="shrink-0 rounded px-2 py-1 text-[11px] font-medium text-emerald-700 transition-colors hover:bg-emerald-100 hover:text-emerald-900"
+                          aria-label="Revoke approval"
+                        >
+                          Revoke
+                        </button>
+                      </div>
                     </div>
-                    <Switch
-                      id="hitl-switch"
-                      checked={humanApproved}
-                      onCheckedChange={setHumanApproved}
-                    />
-                  </div>
+                  ) : (
+                    <div className="space-y-2.5">
+                      <div className="rounded-lg border border-amber-200 bg-amber-50/70 px-4 py-3">
+                        <div className="flex items-center gap-2.5">
+                          <ShieldCheck className="h-4 w-4 shrink-0 text-amber-500" />
+                          <div>
+                            <p className="text-xs font-semibold text-amber-900">
+                              Awaiting reviewer sign-off
+                            </p>
+                            <p className="text-[11px] text-amber-700">
+                              Confirm you have reviewed the GL code, amounts,
+                              and vendor before exporting to Yardi.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setHumanApproved(true)}
+                        className="group flex w-full items-center justify-center gap-2.5 rounded-lg border-2 border-slate-900 bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-sm transition-all hover:bg-slate-800 hover:shadow-md active:scale-[0.98]"
+                      >
+                        <ShieldCheck className="h-4 w-4 transition-transform group-hover:scale-110" />
+                        Approve &amp; Unlock Export
+                      </button>
+                    </div>
+                  )}
 
                   {/* Export Buttons */}
                   <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
