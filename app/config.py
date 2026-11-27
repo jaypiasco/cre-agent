@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     gemini_api_keys: str = ""
     gemini_fast_model: str = "gemini-3.8-flash"
     gemini_vision_model: str = "gemini-3.8-flash"
+    gemini_fallback_model: str = "gemini-3.5-flash-lite"
 
     langfuse_public_key: str = ""
     langfuse_secret_key: str = ""
