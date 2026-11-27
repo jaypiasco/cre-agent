@@ -223,8 +223,9 @@ async def analyze_invoice(
         trace.finalize(error=str(exc))
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        trace.finalize(error=str(exc))
-        raise HTTPException(status_code=502, detail=f"LLM processing error: {exc}") from exc
+        clean_err = LLMService.clean_error_message(exc)
+        trace.finalize(error=clean_err)
+        raise HTTPException(status_code=502, detail=f"LLM processing error: {clean_err}") from exc
     finally:
         trace.flush()
 

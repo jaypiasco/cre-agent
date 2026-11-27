@@ -345,12 +345,12 @@ class LLMService:
             invoice = self._mock_extract(parsed_pdf)
             usage = {"input": 420, "output": 180}
         elif provider == "gemini":
-            model_name = (
+            primary_model = (
                 self.settings.gemini_vision_model
                 if parsed_pdf.mode == "vision"
                 else self.settings.gemini_fast_model
             )
-            invoice, usage = self._gemini_extract(parsed_pdf, model_name)
+            invoice, usage, model_name = self._gemini_extract(parsed_pdf, primary_model)
         elif provider == "openai":
             model_name = (
                 self.settings.openai_vision_model
@@ -402,8 +402,10 @@ class LLMService:
             recommendation = self._mock_match_gl(invoice, chart_of_accounts)
             usage = {"input": 310, "output": 85}
         elif provider == "gemini":
-            model_name = self.settings.gemini_fast_model
-            recommendation, usage = self._gemini_match_gl(invoice, chart_of_accounts, model_name)
+            primary_model = self.settings.gemini_fast_model
+            recommendation, usage, model_name = self._gemini_match_gl(
+                invoice, chart_of_accounts, primary_model
+            )
         elif provider == "openai":
             model_name = self.settings.openai_fast_model
             recommendation, usage = self._openai_match_gl(invoice, chart_of_accounts, model_name)
@@ -441,6 +443,19 @@ class LLMService:
     def _is_gemini_transient_error(exc: Exception) -> bool:
         msg = str(exc).lower()
         return getattr(exc, "code", None) in (500, 503, 504) or "503" in msg or "unavailable" in msg
+
+    @staticmethod
+    def clean_error_message(exc: Exception) -> str:
+        """Convert verbose provider exceptions into concise, user-facing messages."""
+        raw = str(exc).strip()
+        lower = raw.lower()
+        if "503" in lower or "unavailable" in lower or "high demand" in lower:
+            return "Gemini model is temporarily overloaded (503 UNAVAILABLE). Please retry in a moment."
+        if "429" in lower or "resource_exhausted" in lower or "quota" in lower:
+            return "Gemini API rate limit or quota exceeded (429). Please retry shortly or switch keys."
+        if "timeout" in lower or "timed out" in lower:
+            return "LLM request timed out. Please retry in a moment."
+        return raw or "Unexpected LLM processing error."
 
     def _get_gemini_client(self, api_key: Optional[str] = None) -> Any:
         key = (api_key or "").strip()
@@ -484,9 +499,35 @@ class LLMService:
                     raise
         raise RuntimeError("Exhausted all configured Gemini API keys.")
 
+    def _call_gemini_with_fallback(
+        self, fn_factory: Callable[[str], Callable[[Any], T]], primary_model: str
+    ) -> Tuple[T, str]:
+        """Try primary Gemini model with key/transient retries, falling back on 503/transient errors."""
+        fallback = (self.settings.gemini_fallback_model or "").strip()
+        models = [primary_model]
+        if fallback and fallback != primary_model:
+            models.append(fallback)
+        last_exc: Optional[Exception] = None
+        for idx, model_name in enumerate(models):
+            try:
+                return self._call_gemini_with_rotation(fn_factory(model_name)), model_name
+            except Exception as exc:
+                last_exc = exc
+                if idx < len(models) - 1 and self._is_gemini_transient_error(exc):
+                    logger.warning(
+                        "Gemini model '%s' failed with transient error (%s); falling back to '%s'.",
+                        model_name,
+                        exc,
+                        models[idx + 1],
+                    )
+                    continue
+                raise
+        assert last_exc is not None
+        raise last_exc
+
     def _gemini_extract(
         self, parsed_pdf: ParsedPDF, model: str
-    ) -> Tuple[ExtractedInvoice, Dict[str, int]]:
+    ) -> Tuple[ExtractedInvoice, Dict[str, int], str]:
         from google.genai import types
 
         if parsed_pdf.mode == "text":
@@ -506,9 +547,9 @@ class LLMService:
                 ],
             ]
 
-        response = self._call_gemini_with_rotation(
-            lambda client: client.models.generate_content(
-                model=model,
+        response, model_used = self._call_gemini_with_fallback(
+            lambda m: lambda client: client.models.generate_content(
+                model=m,
                 contents=contents,
                 config=types.GenerateContentConfig(
                     system_instruction=EXTRACTION_SYSTEM_PROMPT,
@@ -516,7 +557,8 @@ class LLMService:
                     response_mime_type="application/json",
                     response_schema=ExtractedInvoice,
                 ),
-            )
+            ),
+            primary_model=model,
         )
         if not getattr(response, "text", None):
             raise RuntimeError("Gemini returned an empty structured response for invoice extraction.")
@@ -526,14 +568,14 @@ class LLMService:
             "input": getattr(meta, "prompt_token_count", 0) or 0,
             "output": getattr(meta, "candidates_token_count", 0) or 0,
         }
-        return parsed, usage
+        return parsed, usage, model_used
 
     def _gemini_match_gl(
         self,
         invoice: ExtractedInvoice,
         chart_of_accounts: List[ChartOfAccountsEntry],
         model: str,
-    ) -> Tuple[GLRecommendation, Dict[str, int]]:
+    ) -> Tuple[GLRecommendation, Dict[str, int], str]:
         from google.genai import types
 
         coa_json = json.dumps([c.model_dump() for c in chart_of_accounts], indent=2)
@@ -546,9 +588,9 @@ class LLMService:
             },
             indent=2,
         )
-        response = self._call_gemini_with_rotation(
-            lambda client: client.models.generate_content(
-                model=model,
+        response, model_used = self._call_gemini_with_fallback(
+            lambda m: lambda client: client.models.generate_content(
+                model=m,
                 contents=(
                     f"Chart of Accounts:\n{coa_json}\n\n"
                     f"Extracted Invoice:\n{invoice_summary}"
@@ -559,7 +601,8 @@ class LLMService:
                     response_mime_type="application/json",
                     response_schema=GLRecommendation,
                 ),
-            )
+            ),
+            primary_model=model,
         )
         if not getattr(response, "text", None):
             raise RuntimeError("Gemini returned an empty structured response for GL matching.")
@@ -569,7 +612,7 @@ class LLMService:
             "input": getattr(meta, "prompt_token_count", 0) or 0,
             "output": getattr(meta, "candidates_token_count", 0) or 0,
         }
-        return parsed, usage
+        return parsed, usage, model_used
 
     # ------------------------------------------------------------------
     # OpenAI implementation
