@@ -508,46 +508,48 @@ export default function CreWorkbenchPage() {
               Invoice Ingestion
             </CardTitle>
             <CardDescription>
-              Load a sample CRE vendor invoice or upload your own PDF to run
-              multimodal extraction, deterministic Decimal math gates, and GL
-              coding.
+              {llmConfig.mode === "mock"
+                ? "Load a sample CRE vendor invoice or upload your own PDF to run multimodal extraction, deterministic Decimal math gates, and GL coding."
+                : "Upload your own PDF to run multimodal extraction, deterministic Decimal math gates, and GL coding."}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="mr-1 text-xs font-medium uppercase tracking-wider text-slate-500">
-                Quick-Load Samples:
-              </span>
-              {SAMPLE_PRESETS.map((preset) => (
-                <div
-                  key={preset.id}
-                  className="inline-flex h-8 items-center overflow-hidden rounded-md border border-slate-200 bg-white shadow-2xs"
-                >
-                  <button
-                    type="button"
-                    disabled={isAnalyzing}
-                    onClick={() => void handleSampleClick(preset)}
-                    className="inline-flex h-full items-center gap-2 px-2.5 text-xs font-medium text-slate-900 transition-colors hover:bg-slate-100 disabled:pointer-events-none disabled:opacity-50"
+            {llmConfig.mode === "mock" && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="mr-1 text-xs font-medium uppercase tracking-wider text-slate-500">
+                  Quick-Load Samples:
+                </span>
+                {SAMPLE_PRESETS.map((preset) => (
+                  <div
+                    key={preset.id}
+                    className="inline-flex h-8 items-center overflow-hidden rounded-md border border-slate-200 bg-white shadow-2xs"
                   >
-                    <FileText className="h-3.5 w-3.5 text-slate-500" />
-                    <span>{preset.label}</span>
-                    <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">
-                      {preset.tag}
-                    </span>
-                  </button>
-                  <a
-                    href={preset.path}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title={`Preview or download ${preset.filename}`}
-                    aria-label={`Preview or download ${preset.filename}`}
-                    className="inline-flex h-full items-center border-l border-slate-200 px-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
-                  >
-                    <Eye className="h-3.5 w-3.5" />
-                  </a>
-                </div>
-              ))}
-            </div>
+                    <button
+                      type="button"
+                      disabled={isAnalyzing}
+                      onClick={() => void handleSampleClick(preset)}
+                      className="inline-flex h-full items-center gap-2 px-2.5 text-xs font-medium text-slate-900 transition-colors hover:bg-slate-100 disabled:pointer-events-none disabled:opacity-50"
+                    >
+                      <FileText className="h-3.5 w-3.5 text-slate-500" />
+                      <span>{preset.label}</span>
+                      <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">
+                        {preset.tag}
+                      </span>
+                    </button>
+                    <a
+                      href={preset.path}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={`Preview or download ${preset.filename}`}
+                      aria-label={`Preview or download ${preset.filename}`}
+                      className="inline-flex h-full items-center border-l border-slate-200 px-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                    </a>
+                  </div>
+                ))}
+              </div>
+            )}
 
             <label
               htmlFor="pdf-upload"
